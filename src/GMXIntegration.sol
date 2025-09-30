@@ -94,7 +94,6 @@ contract GMXIntegration {
     address constant GMX_ORACLE = 0x6D5F3c723002847B009D07Fe8e17d6958F153E4e;
     address constant USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
     uint256 constant USDC_AMOUNT = 10e6;
-    uint256 constant EXECUTION_FEE = 93_189_148_000_000;
 
     // Create order params addresses constants
     address constant FUNDS_RECEIVER = 0xfF7ABDFc247539016a87257fA144fB95447647d9;
@@ -106,7 +105,6 @@ contract GMXIntegration {
     // Create order params numbers constants
     uint256 constant SIZE_DELTA_USD = 10e30; // $10 USD position size
     uint256 constant TRIGGER_PRICE = 0;
-    uint256 constant ACCEPTABLE_PRICE = 3742437801860489; // $3742.437801860489
     uint256 constant CALLBACK_GAS_LIMIT = 0;
     uint256 constant MIN_OUTPUT_AMOUNT = 0;
     uint256 constant VALID_FROM_TIME = 0;
@@ -116,9 +114,9 @@ contract GMXIntegration {
 
     event OrderCreated(bytes32 indexed orderKey);
 
-    function longETH() public payable {
+    function longETH(uint256 acceptablePrice, uint256 executionFee) public payable {
         GMXInterface gmxRouter = GMXInterface(GMX_EXCHANGE_ROUTER);
-        gmxRouter.sendWnt{value: EXECUTION_FEE}(GMX_ORDER_VAULT, EXECUTION_FEE);
+        gmxRouter.sendWnt{value: executionFee}(GMX_ORDER_VAULT, executionFee);
 
         IERC20(USDC).approve(GMX_ORDER_VAULT, USDC_AMOUNT);
         IERC20(USDC).approve(GMX_ROUTER, USDC_AMOUNT);
@@ -141,8 +139,8 @@ contract GMXIntegration {
                 SIZE_DELTA_USD,
                 USDC_AMOUNT,
                 TRIGGER_PRICE,
-                ACCEPTABLE_PRICE,
-                EXECUTION_FEE,
+                acceptablePrice,
+                executionFee,
                 CALLBACK_GAS_LIMIT,
                 MIN_OUTPUT_AMOUNT,
                 VALID_FROM_TIME
@@ -155,7 +153,7 @@ contract GMXIntegration {
             bytes32(0x0000000000000000000000000000000000000000000000000000000000000000)
         );
 
-        bytes32 key = gmxRouter.createOrder{value: EXECUTION_FEE}(params);
+        bytes32 key = gmxRouter.createOrder{value: executionFee}(params);
         emit OrderCreated(key);
     }
 

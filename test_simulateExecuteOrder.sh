@@ -12,6 +12,10 @@ export pubkey=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
 export privkey=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 export uni2_router=0x4752ba5dbc23f44d87826276bf6fd6b1c372ad24
 
+export ACCEPTABLE_PRICE=3742437801860489
+# Execution fee (in wei)
+export EXECUTION_FEE=93189148000000
+
 # deploy the contract
 echo "Deploying contract..."
 CONTRACT_ADDR=$(forge create \
@@ -44,7 +48,7 @@ RAW_TX=$(cast send \
   --value=$(cast tw 0.00093189148) \
   --gas-limit=10000000 \
   --json \
-  "$cnt" "longETH()")
+  $cnt "longETH(uint256,uint256)" $ACCEPTABLE_PRICE $EXECUTION_FEE)
 echo "Raw tx: $RAW_TX"
 
 TX_HASH=$(echo "$RAW_TX" | jq -r '.transactionHash')

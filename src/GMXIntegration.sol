@@ -1,9 +1,3 @@
-// SPDX-License-Identifier: UNLICENSED
-//
-// ------------------------
-// --      Example       --
-// -- GMX_V2 Integration --
-// ------------------------
 pragma solidity ^0.8.30;
 
 import {OracleUtils} from "gmx-synthetics/contracts/oracle/OracleUtils.sol";
@@ -11,11 +5,11 @@ import {Price} from "gmx-synthetics/contracts/price/Price.sol";
 
 interface IERC20 {
     function approve(address spender, uint256 amount) external returns (bool);
+
     function balanceOf(address account) external view returns (uint256);
 }
 
-event OrderCreated(bytes32 orderKey);
-
+// Remove the IMarket interface since the market token doesn't have these functions
 /*
  * The GMX Interface is assembled from the GMX V2 protocol, found at <https://github.com/gmx-io/gmx-synthetics/tree/main/contracts>
  *
@@ -43,7 +37,6 @@ interface GMXInterface {
         Liquidation,
         StopIncrease
     }
-
     enum DecreasePositionSwapType {
         NoSwap,
         SwapPnlTokenToCollateralToken,
@@ -83,12 +76,12 @@ interface GMXInterface {
     }
 
     function sendWnt(address receiver, uint256 amount) external payable;
+
     function sendTokens(address token, address receiver, uint256 amount) external payable;
+
     function createOrder(CreateOrderParams calldata params) external payable returns (bytes32);
+
     function simulateExecuteOrder(bytes32 key, OracleUtils.SimulatePricesParams memory simulatedOracleParams)
-        external
-        payable;
-    function simulateExecuteLatestOrder(OracleUtils.SimulatePricesParams memory simulatedOracleParams)
         external
         payable;
 }
@@ -97,35 +90,62 @@ contract GMXIntegration {
     address constant GMX_ORDER_VAULT = 0x31eF83a530Fde1B38EE9A18093A333D8Bbbc40D5;
     address constant GMX_EXCHANGE_ROUTER = 0x602b805EedddBbD9ddff44A7dcBD46cb07849685;
     address constant GMX_ROUTER = 0x7452c558d45f8afC8c83dAe62C3f8A5BE19c71f6;
-    address constant GMX_MARKET = 0x450bb6774Dd8a756274E0ab4107953259d2ac541;
     address constant GMX_MARKET_TOKEN = 0x9F159014CC218e942E9E9481742fE5BFa9ac5A2C;
-
+    address constant GMX_ORACLE = 0x6D5F3c723002847B009D07Fe8e17d6958F153E4e;
     address constant USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
-    address constant FUNDS_RECEIVER = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
+    uint256 constant USDC_AMOUNT = 10e6;
+    uint256 constant EXECUTION_FEE = 93_189_148_000_000;
 
-    function longETH(uint256 executionFee, uint256 acceptablePrice) public payable returns (bytes32) {
-        GMXInterface gmxExchangeRouter = GMXInterface(GMX_EXCHANGE_ROUTER);
+    // Create order params addresses constants
+    address constant FUNDS_RECEIVER = 0xfF7ABDFc247539016a87257fA144fB95447647d9;
+    address constant CANCELLATION_RECEIVER = 0x0000000000000000000000000000000000000000;
+    address constant CALLBACK_CONTRACT = 0x0000000000000000000000000000000000000000;
+    address constant UI_FEE_RECEIVER = 0xff00000000000000000000000000000000000001;
+    address constant GMX_MARKET = 0x450bb6774Dd8a756274E0ab4107953259d2ac541;
 
-        gmxExchangeRouter.sendWnt{value: executionFee}(GMX_ORDER_VAULT, executionFee);
-        IERC20(USDC).approve(GMX_ORDER_VAULT, 10e6);
-        IERC20(USDC).approve(GMX_ROUTER, 10e6);
-        gmxExchangeRouter.sendTokens(USDC, GMX_ORDER_VAULT, 10e6);
+    // Create order params numbers constants
+    uint256 constant SIZE_DELTA_USD = 10e30; // $10 USD position size
+    uint256 constant TRIGGER_PRICE = 0;
+    uint256 constant ACCEPTABLE_PRICE = 3742437801860489; // $3742.437801860489
+    uint256 constant CALLBACK_GAS_LIMIT = 0;
+    uint256 constant MIN_OUTPUT_AMOUNT = 0;
+    uint256 constant VALID_FROM_TIME = 0;
+
+    bytes4 constant END_OF_ORACLE_SIMULATION_SELECTOR = 0x4e48dcda;
+
+
+    event OrderCreated(bytes32 indexed orderKey);
+
+    function longETH() public payable {
+        GMXInterface gmxRouter = GMXInterface(GMX_EXCHANGE_ROUTER);
+        gmxRouter.sendWnt{value: EXECUTION_FEE}(GMX_ORDER_VAULT, EXECUTION_FEE);
+
+        IERC20(USDC).approve(GMX_ORDER_VAULT, USDC_AMOUNT);
+        IERC20(USDC).approve(GMX_ROUTER, USDC_AMOUNT);
+        gmxRouter.sendTokens(USDC, GMX_ORDER_VAULT, USDC_AMOUNT);
 
         address[] memory path = new address[](1);
-        path[0] = GMX_MARKET;
+        path[0] = GMX_MARKET_TOKEN;
 
         GMXInterface.CreateOrderParams memory params = GMXInterface.CreateOrderParams(
             GMXInterface.CreateOrderParamsAddresses(
                 FUNDS_RECEIVER,
-                0x0000000000000000000000000000000000000000,
-                0x0000000000000000000000000000000000000000,
-                0xff00000000000000000000000000000000000001,
+                CANCELLATION_RECEIVER,
+                CALLBACK_CONTRACT,
+                UI_FEE_RECEIVER,
                 GMX_MARKET,
                 USDC,
                 path
             ),
             GMXInterface.CreateOrderParamsNumbers(
-                20_000 * 1e30, 10e6, 0, acceptablePrice, executionFee, 0, 0, 0
+                SIZE_DELTA_USD,
+                USDC_AMOUNT,
+                TRIGGER_PRICE,
+                ACCEPTABLE_PRICE,
+                EXECUTION_FEE,
+                CALLBACK_GAS_LIMIT,
+                MIN_OUTPUT_AMOUNT,
+                VALID_FROM_TIME
             ),
             GMXInterface.OrderType(GMXInterface.OrderType.MarketIncrease),
             GMXInterface.DecreasePositionSwapType(GMXInterface.DecreasePositionSwapType.NoSwap),
@@ -135,7 +155,8 @@ contract GMXIntegration {
             bytes32(0x0000000000000000000000000000000000000000000000000000000000000000)
         );
 
-        return gmxExchangeRouter.createOrder{value: executionFee}(params);
+        bytes32 key = gmxRouter.createOrder{value: EXECUTION_FEE}(params);
+        emit OrderCreated(key);
     }
 
     function simulateOrderWithPrices(
@@ -143,7 +164,7 @@ contract GMXIntegration {
         address[] calldata tokens,
         uint256[] calldata minPrices,
         uint256[] calldata maxPrices
-    ) external returns (bool ok, string memory reason) {
+    ) external returns (bool success, bytes memory revertData) {
         require(tokens.length == minPrices.length && tokens.length == maxPrices.length, "len mismatch");
 
         Price.Props[] memory primaryPrices = new Price.Props[](tokens.length);
@@ -151,24 +172,32 @@ contract GMXIntegration {
             primaryPrices[i] = Price.Props({min: minPrices[i], max: maxPrices[i]});
         }
 
-        GMXInterface gmx = GMXInterface(GMX_EXCHANGE_ROUTER);
         OracleUtils.SimulatePricesParams memory sp = OracleUtils.SimulatePricesParams({
             primaryTokens: tokens,
             primaryPrices: primaryPrices,
             minTimestamp: block.timestamp,
-            maxTimestamp: block.timestamp
+            maxTimestamp: block.timestamp + 50
         });
 
-        // Do a low-level staticcall so we can capture success + returndata
-        (bool success, bytes memory ret) = address(GMX_EXCHANGE_ROUTER).staticcall(
-            abi.encodeWithSelector(GMXInterface.simulateExecuteOrder.selector, key, sp)
+        (bool ok, bytes memory data) = GMX_EXCHANGE_ROUTER.call(
+            abi.encodeWithSelector(
+                GMXInterface.simulateExecuteOrder.selector,
+                key,
+                sp
+            )
         );
 
-        if (success) {
+        if (ok) {
             return (true, "");
-        }
-        else {
-            return (false, "Simulation failed");
+        } else {
+            // real revert - decode the error
+            if (data.length >= 4) {
+                bytes4 selector = bytes4(data);
+                if (selector == END_OF_ORACLE_SIMULATION_SELECTOR) { 
+                    return (true, "");
+                }
+            }
+            return (false, data);
         }
     }
 }

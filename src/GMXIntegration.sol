@@ -111,7 +111,6 @@ contract GMXIntegration {
 
     bytes4 constant END_OF_ORACLE_SIMULATION_SELECTOR = 0x4e48dcda;
 
-
     event OrderCreated(bytes32 indexed orderKey);
 
     function longETH(uint256 acceptablePrice, uint256 executionFee) public payable {
@@ -127,13 +126,7 @@ contract GMXIntegration {
 
         GMXInterface.CreateOrderParams memory params = GMXInterface.CreateOrderParams(
             GMXInterface.CreateOrderParamsAddresses(
-                FUNDS_RECEIVER,
-                CANCELLATION_RECEIVER,
-                CALLBACK_CONTRACT,
-                UI_FEE_RECEIVER,
-                GMX_MARKET,
-                USDC,
-                path
+                FUNDS_RECEIVER, CANCELLATION_RECEIVER, CALLBACK_CONTRACT, UI_FEE_RECEIVER, GMX_MARKET, USDC, path
             ),
             GMXInterface.CreateOrderParamsNumbers(
                 SIZE_DELTA_USD,
@@ -177,13 +170,8 @@ contract GMXIntegration {
             maxTimestamp: block.timestamp + 50
         });
 
-        (bool ok, bytes memory data) = GMX_EXCHANGE_ROUTER.call(
-            abi.encodeWithSelector(
-                GMXInterface.simulateExecuteOrder.selector,
-                key,
-                sp
-            )
-        );
+        (bool ok, bytes memory data) =
+            GMX_EXCHANGE_ROUTER.call(abi.encodeWithSelector(GMXInterface.simulateExecuteOrder.selector, key, sp));
 
         if (ok) {
             return (true, "");
@@ -191,7 +179,7 @@ contract GMXIntegration {
             // real revert - decode the error
             if (data.length >= 4) {
                 bytes4 selector = bytes4(data);
-                if (selector == END_OF_ORACLE_SIMULATION_SELECTOR) { 
+                if (selector == END_OF_ORACLE_SIMULATION_SELECTOR) {
                     return (true, "");
                 }
             }
